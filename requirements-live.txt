@@ -1,0 +1,6 @@
+# Only the live NIC capture path imports Scapy.
+# Npcap must also be installed on Windows (normally with Wireshark).
+scapy
+
+# Needed for Gate 1 verification in the host-only copy.
+pytest

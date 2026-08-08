@@ -1,0 +1,15 @@
+__pycache__/
+.venv/
+.pytest_cache/
+.pytest_tmp/
+*.pyc
+*.pcap
+*.pcapng
+*.pgm
+*.raw
+rows.csv
+summary.csv
+images/
+archive/
+build/
+run_*/
