@@ -117,6 +117,8 @@ def parse_camera_mode(payload: bytes) -> CameraModeResult:
         errors.append("frame_overflow")
     if packet.length_error:
         errors.append("length_error")
+    if packet.fpga_crc_error:
+        errors.append("fpga_crc_error")
 
     return CameraModeResult(
         ok=not errors,

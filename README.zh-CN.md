@@ -34,6 +34,12 @@ flowchart LR
 
 S1 是按相机拆 lane。S2 是把图像发布改成多进程。
 
+## 发布文档索引
+
+完整协议和复刻说明见 [protocol_and_reproduction.zh-CN.md](docs/protocol_and_reproduction.zh-CN.md)，覆盖 Project Overview、System Scope、Host Receiver Architecture、128-byte Packet Format、CRC Audit Path、Npcap Capture Mechanism、Buffer and Queue Configuration、Frame Reassembly、CSV and Image Output、Error Statistics、Installation、Interface Selection、CAM0 Test、CAM1 Test、Dual-camera Test、PCAP Replay、Directory Structure、Testing、Troubleshooting 和 Known Limitations。
+
+当前审计规则是明确分层的：出口 CRC 正确但 FPGA 状态为 `0x10`，表示 MCU 到 FPGA 入口 CRC 错误；出口 CRC 错误则表示 FPGA 到 Ethernet/Host 链路损坏。两类错误都保留在 session audit 中，但都不进入正常图像 CSV 或帧重组。
+
 ## 快速开始
 
 1. 安装 Windows 版 Npcap。

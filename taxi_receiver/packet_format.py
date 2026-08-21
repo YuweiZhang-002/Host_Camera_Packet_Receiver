@@ -46,6 +46,7 @@ SOURCE_ROW_FLAG_MASK = FLAG_FRAME_OVERFLOW | FLAG_LAST_ROW | FLAG_FIRST_ROW
 # for project-side code, but it is a bit in fpga_status, not in row_flags.
 FPGA_STATUS_FRAME_OVERFLOW = 1 << 0
 FPGA_STATUS_LENGTH_ERROR = 1 << 3
+FPGA_STATUS_CRC_ERROR = 1 << 4
 FLAG_LENGTH_ERROR = FPGA_STATUS_LENGTH_ERROR
 
 # Protocol word values and their expected MSB-byte-first wire representation.
@@ -132,6 +133,7 @@ class CameraRowPacket:
     last_row: bool
     frame_overflow: bool
     length_error: bool
+    fpga_crc_error: bool
 
 
 def peek_camera_id(raw_ethernet_frame: bytes) -> Optional[int]:
@@ -195,6 +197,7 @@ def parse_camera_row(payload: bytes) -> CameraRowPacket:
             or (header.fpga_status & FPGA_STATUS_FRAME_OVERFLOW)
         ),
         length_error=bool(header.fpga_status & FPGA_STATUS_LENGTH_ERROR),
+        fpga_crc_error=bool(header.fpga_status & FPGA_STATUS_CRC_ERROR),
     )
 
 
