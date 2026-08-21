@@ -34,6 +34,12 @@ Queue boundaries matter:
 
 S1 is the per-camera lane split. S2 is the multi-process image publication path.
 
+## Release documentation map
+
+The complete protocol and reproduction guide is [here](docs/protocol_and_reproduction.md). It covers the required release topics: Project Overview, System Scope, Host Receiver Architecture, 128-byte Packet Format, CRC Audit Path, Npcap Capture Mechanism, Buffer and Queue Configuration, Frame Reassembly, CSV and Image Output, Error Statistics, Installation, Interface Selection, CAM0 Test, CAM1 Test, Dual-camera Test, PCAP Replay, Directory Structure, Testing, Troubleshooting, and Known Limitations.
+
+The current audit rule is explicit: a valid egress CRC with FPGA status `0x10` means the MCU-to-FPGA ingress CRC failed; an invalid egress CRC means the FPGA-to-Ethernet/Host path was corrupted. Both classes remain in session audit, and neither enters normal image CSV or frame reassembly.
+
 ## Quick Start
 
 1. Install Npcap on Windows.

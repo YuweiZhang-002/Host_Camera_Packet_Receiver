@@ -136,6 +136,25 @@ def test_camera_mode_rejects_fpga_capture_error_flags():
     assert result.errors == ("frame_overflow", "length_error")
 
 
+def test_camera_mode_rejects_fpga_ingress_crc_status_even_when_egress_crc_is_valid():
+    raw = build_camera_row(
+        cam_id=0,
+        frame_id=1,
+        row_idx=2,
+        row_flags=0,
+        row_seq=0,
+        payload=bytes(ROW_BYTES),
+        fpga_status=0x10,
+    )
+    result = parse_camera_mode(raw)
+
+    assert not result.ok
+    assert result.reason == "fpga_crc_error"
+    assert result.errors == ("fpga_crc_error",)
+    assert result.packet is not None
+    assert result.packet.crc_ok
+
+
 def test_camera_mode_rejects_undefined_source_flag_bits():
     raw = build_camera_row(
         cam_id=0,

@@ -8,6 +8,7 @@ from taxi_receiver.packet_format import (
     FLAG_FIRST_ROW,
     FLAG_LAST_ROW,
     FLAG_LENGTH_ERROR,
+    FPGA_STATUS_CRC_ERROR,
     FPGA_STATUS_LENGTH_ERROR,
     PACKET_LEN,
     ROW_BYTES,
@@ -27,6 +28,7 @@ def test_live_wire_flag_assignments():
     assert FLAG_LAST_ROW == 0x02
     assert FLAG_FIRST_ROW == 0x04
     assert FLAG_LENGTH_ERROR == 0x08
+    assert FPGA_STATUS_CRC_ERROR == 0x10
 
 
 def test_round_trip_ok():
@@ -100,6 +102,23 @@ def test_current_metadata_is_big_endian_but_crc_tail_is_little_endian():
     assert packet.trailer.m00 == 0x10203040
     assert packet.trailer.vy_q8 == -2
     assert packet.crc_ok
+
+
+def test_fpga_ingress_crc_status_is_separate_from_egress_crc():
+    raw = build_camera_row(
+        cam_id=1,
+        frame_id=4,
+        row_idx=2,
+        row_flags=0,
+        row_seq=7,
+        payload=bytes(ROW_BYTES),
+        fpga_status=FPGA_STATUS_CRC_ERROR,
+    )
+    packet = parse_camera_row(raw)
+
+    assert packet.crc_ok
+    assert packet.header.fpga_status == FPGA_STATUS_CRC_ERROR
+    assert packet.fpga_crc_error
 
 
 def test_corrupt_crc_detected():
