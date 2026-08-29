@@ -2,164 +2,134 @@
 
 [English README](README.md)
 
-这是 host 侧 Python 接收端：接收 FPGA 板发送的原始以太网图像行帧，EtherType 为 `0x88B5`，单包固定 128 字节。仓库负责接收、校验、重组、归档和可选的图像发布，不包含 FPGA/RTL 侧源码。
+这是 PRG_CAM 的上位机 Python 接收与标定仓库。它接收 FPGA 发出的 EtherType `0x88B5` 原始以太网帧，处理固定 128 字节 payload，完成包格式与 CRC 审计、行连续性监控、帧重组、CSV/PGM 落盘，以及可选的独立进程图像发布。
+
+FPGA/RTL 实现位于独立仓库 [FPGA-Based-Camera-Buffer](https://github.com/YuweiZhang-002/FPGA-Based-Camera-Buffer)。本仓库负责详细的六层接收机、单相机内参、双目配对、固定 K/D 外参求解与独立 holdout 验证。
 
 ## 架构
 
-流水线是分层的，并且每一层都被有界队列隔开：
-
 ```mermaid
 flowchart LR
-    NIC[NIC / Npcap] --> Q1[队列 1：capture packets]
-    Q1 --> W[taxi-worker]
-    W --> L2[Layer 2：Ethernet 校验]
-    L2 --> L3[Layer 3：解析 / CRC]
-    L3 --> L4[Layer 4：流监控]
-    L4 --> L5[Layer 5：重组]
-    L5 --> Q2[队列 2：完成帧输出]
-    Q2 --> S1[S1：按相机拆 lane]
-    S1 --> Q3[队列 3：rows.csv writer]
-    S1 --> Q4[队列 4：session audit]
-    S1 --> Q5[队列 5：storage / image sinks]
-    Q5 --> S2[S2：可选的多进程图像发布]
+    NIC[NIC / Npcap] --> Q1[有界抓包队列]
+    Q1 --> L2[以太网校验]
+    L2 --> L3[包解析 / CRC 审计]
+    L3 --> L4[序列号与行监控]
+    L4 --> L5[帧重组]
+    L5 --> Q2[完整帧队列]
+    Q2 --> LANES[按相机分 lane]
+    LANES --> CSV[rows.csv / session audit]
+    LANES --> STORE[落盘]
+    STORE --> PROC[可选发布器进程]
 ```
 
-五个有界边界的作用分别是：
+这些队列边界不是装饰：抓包与 Python 消费隔离，重组与慢速落盘隔离，CSV 写入独立限流；`--publish-images process` 还把图像转换/发布移出 lane 线程及其 GIL/I/O 临界路径。因此磁盘或发布器短暂停顿不会直接反压成前端丢包。
 
-- 队列 1 隔离实时抓包和 Python worker。
-- 队列 2 隔离重组和慢速落盘 / 图像发布。
-- 队列 3 隔离 `rows.csv` 格式化与 flush 延迟。
-- 队列 4 是同步的 session audit 路径。
-- 队列 5 隔离 sink 失败，并让 S2 把图像发布移出 lane 线程。
+六层可观测链路如下：
 
-S1 是按相机拆 lane。S2 是把图像发布改成多进程。
+| 层 | 职责 | 主要证据 |
+|---|---|---|
+| 1 | Npcap 入站 | `Capture ingress`、`ps_recv`、`ps_drop` |
+| 2 | 以太网长度/类型 | matching Ethernet、bad length |
+| 3 | 固定包解析与 CRC | `parsed_ok`、CRC/sync/length errors |
+| 4 | 包和行连续性 | gap、duplicate、out-of-order、row jump |
+| 5 | 按相机重组帧 | 完整/不完整帧记录 |
+| 6 | CSV、PGM、归档和发布 | `rows.csv`、`summary.csv`、PGM、sink 计数 |
 
-## 发布文档索引
+本项目遵循“证据不得跨层晋升”：收到以太网帧不等于获得有效相机行，完整帧不等于找到有效圆点阵列，低重投影误差也不自动等于外参具有物理发布资格。
 
-完整协议和复刻说明见 [protocol_and_reproduction.zh-CN.md](docs/protocol_and_reproduction.zh-CN.md)，覆盖 Project Overview、System Scope、Host Receiver Architecture、128-byte Packet Format、CRC Audit Path、Npcap Capture Mechanism、Buffer and Queue Configuration、Frame Reassembly、CSV and Image Output、Error Statistics、Installation、Interface Selection、CAM0 Test、CAM1 Test、Dual-camera Test、PCAP Replay、Directory Structure、Testing、Troubleshooting 和 Known Limitations。
+## 安装
 
-当前审计规则是明确分层的：出口 CRC 正确但 FPGA 状态为 `0x10`，表示 MCU 到 FPGA 入口 CRC 错误；出口 CRC 错误则表示 FPGA 到 Ethernet/Host 链路损坏。两类错误都保留在 session audit 中，但都不进入正常图像 CSV 或帧重组。
-
-## 快速开始
-
-1. 安装 Windows 版 Npcap。
-2. 如果要做 live 抓包，请用管理员 PowerShell 打开终端。
-3. 创建本地环境：
+Windows 实时抓包需要 Npcap。创建隔离环境：
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r .\requirements-live.txt
+.\.venv\Scripts\python.exe -m pip install -r .\requirements-calibration.txt
 ```
 
-4. 列出网卡并复制你要用的 GUID：
+`requirements-calibration.txt` 将 OpenCV 限制在 `<5`，原因是本项目已发现 OpenCV 5.0.0.93 的 fisheye 多视图回归问题。依赖由包管理器安装，本仓库不内嵌第三方源码。
+
+## 接收机快速开始
+
+先列出 Npcap 接口并复制真实设备名：
 
 ```powershell
 .\.venv\Scripts\python.exe -m taxi_receiver.cli --list
 ```
 
-5. 启动接收机：
+将双路图像写入带时间戳的新目录：
 
 ```powershell
-.\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}"
-```
+$interface = '\Device\NPF_{替换为真实GUID}'
+$runRoot = Join-Path $PWD ('runs\{0:yyyyMMdd_HHmmss}_dual' -f (Get-Date))
 
-## 常见场景
-
-连通性盲测：
-
-```powershell
-.\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}" -NoRowsCsv
-```
-
-线速压测：
-
-```powershell
-.\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}" `
-  -ImagesRoot .\images `
-  -QueueDepth 65536 `
-  -FrameOutputQueueDepth 256 `
+.\run_receiver.ps1 `
+  -Interface $interface `
+  -ImagesRoot $runRoot `
+  -CameraIds '0,1' `
+  -SplitByCamera on `
+  -ImagePolicy strict `
+  -PublishFrames complete `
   -PublishImages process `
-  -PublishFrames complete
+  -CrcMode enabled
 ```
 
-容错救帧采集：
+接收机在按下 `Ctrl+C` 前持续运行，这是正常行为。必须确认 `$interface` 不是占位符，并观察 `$runRoot\cam0` 与 `$runRoot\cam1` 是否持续生成 PGM 和 `rows.csv`。
+
+## 内参与外参入口
+
+执行前先阅读：
+
+- [中文标定完整流程](docs/calibration_pipeline.zh-CN.md)
+- [English calibration pipeline](docs/calibration_pipeline.md)
+
+两个公共 PowerShell 入口为：
 
 ```powershell
-.\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}" `
-  -ImagesRoot .\images `
-  -OutputRoot .\archive `
-  -ImagePolicy recover-zero-fill `
-  -PublishFrames eligible
+.\scripts_ps\run_intrinsic_calibration.ps1 -PreflightOnly <补齐必填路径>
+.\scripts_ps\run_extrinsic_calibration.ps1 -PreflightOnly <补齐必填路径>
 ```
 
-离线 replay 四道闸门：
+预检通过后去掉 `-PreflightOnly` 才会真正计算。两个脚本都支持 `-WhatIf`，拒绝复用非空输出目录，严格区分 Training、V1、V2，并写出 `run_manifest.json`。内参按相机独立求解；外参冻结两份 K/D，要求两机使用完全相同的物理点索引集，在 Training 求 cam0→cam1 的 R/t，再由独立 V1/V2 验证冻结结果。
 
-```powershell
-.\verify_s2.ps1 -ReplayPcap .\build\wire.pcapng -OutRoot .\build\s2_verify
-```
+## CRC 的分层含义
 
-## CLI 开关表
+- FPGA 状态位 `0x10` 表示启用入口检查时 MCU→FPGA 的 CRC 比较结果。
+- 出口包 CRC 由 FPGA 重算并由 Host 校验，覆盖 FPGA→Ethernet→Host 路径。
 
-| 分组 | 开关 | 作用 |
-|---|---|---|
-| Capture | `--interface`, `--mode`, `--pcap-buffer-size`, `--queue-depth` | live 输入和抓包缓冲 |
-| Replay | `--replay-pcap`, `--source-mac` | 离线 PCAP / PCAPNG 回放 |
-| 解析 / 深度 | `--reassemble`, `--max-stage` | 按需停在 Layer 2/3/4/5 |
-| 图像策略 | `--image-policy`, `--max-missing-rows`, `--max-consecutive-missing` | strict 与 recover-zero-fill |
-| lane / publisher | `--split-by-camera`, `--camera-ids`, `--publish-images`, `--publisher-queue-depth` | S1 和 S2 行为 |
-| 输出 | `--output-root`, `--images-root`, `--no-rows-csv`, `--session-audit` | 归档与图像 sink |
-| 归档 | `--archive-root-policy`, `--archive-collision-policy` | 完成帧冲突处理 |
-| 其他 | `--report-interval`, `--list`, `--bit-order`, `--frame-timeout` | 报告和诊断 |
+因此，“出口 CRC 正确但状态含 `0x10`”指向 Ethernet 之前；“出口 CRC 错误”指向发出的包或传输/抓包链路。CRC 属于接收证据审计，不代替标定图像质量判断。
 
-## 退出码
+## 状态与失败判断
 
-| 码 | 含义 |
-|---|---|
-| 0 | 成功 |
-| 2 | 参数错误 |
-| 3 | 抓包权限问题 |
-| 4 | 抓包 OSError、接口名错或 Npcap 缺失 |
-| 5 | 当前环境缺 Scapy |
-| 6 | archive root policy 拒绝目标根目录 |
-| 7 | 某个 sink 连续失败，或所有提交帧都失败 |
+接收机 CLI 的退出码见 [协议与复刻说明](docs/protocol_and_reproduction.zh-CN.md)。标定包装脚本仅在所请求阶段全部通过时返回 0；任一 Python 阶段非零，脚本会停止并把失败写入 manifest。算法 JSON 的 `acceptable`、`limited`、`unacceptable`、`ready`、`not_ready`、`pass`、`fail` 含义不同，禁止只看到生成 JSON 或低 RMS 就宣布通过。
 
-## 排障
+排查时从第一个异常观测点开始：
 
-丢包模型从上往下看有四层：
+1. `ps_recv`/ingress：NIC、Npcap 权限、GUID。
+2. Matching Ethernet：EtherType、物理链路、源地址过滤。
+3. `parsed_ok`：包长、sync、cam ID、CRC mode。
+4. 行连续性：序号间隙、重复、乱序、跳行。
+5. 帧完整性：缺行和 cam0/cam1 路由。
+6. 发布：lane/CSV drop、publisher queue、磁盘延迟。
+7. 标定：完整网格、姿态覆盖、点集一致性和 holdout 质量。
 
-- `ps_drop` 在 Npcap 内核里，Python 还没看到包就已经丢了。
-- `Capture queue drops` 在 capture 和共享 worker 之间。
-- `Lane queue drops` 在共享 worker 和 per-camera lane 之间。
-- `csv_rows_dropped` 在 lane 和 rows.csv writer 之间。
+## 文档索引
 
-`queue peak` 只能证明队列至少满过一次。`submit blocked` 才能证明是下游 sink 卡住了。
+- [协议与复刻说明](docs/protocol_and_reproduction.zh-CN.md)
+- [标定完整流程](docs/calibration_pipeline.zh-CN.md)
+- [快速命令](CHEATSHEET.md)
+- [性能优化证据](docs/notes/p11_python_receiver_performance_optimization.md)
+- [迁移清单](COPY_MANIFEST.md)
+- [与源工作区的差异](DIVERGENCE.md)
 
-如果队列看起来没问题，但 `ps_drop` 在涨，先降每包 Python 成本。
+## 当前验证状态
 
-## 性能说明
-
-下面数字都是本机实测，带有明确测量条件，不是通用常数。
-
-- 40,000 包样本（本机 Windows 主机）：把 `Ether(packet_bytes)` 改成字节切片后，capture 回调从 28.8 us/包降到 0.5 us/包；CRC16 走 `binascii.crc_hqx` 路径后，总包 CPU 成本从 52.0 us 降到 13.5 us。
-- 同一组样本：单核吞吐估算从 19,231 pkt/s 提升到 74,074 pkt/s。
-- 923,514 帧双相机负载：`--publish-images thread` 用时 83.7 s，`--publish-images process` 用时 65.0 s；lane `submit blocked` 从 17.8 s + 57.2 s 降到 0.000 s + 0.000 s。
-- 源笔记里记录的 9,179,893 包 live run：`ps_drop` 从 3,047,448（33.2%）降到 0。
+- 标定迁入前的 Host 基线记录为 `157 passed, 2 skipped`。
+- 迁入的标定测试子集在 Python 3.14.6、NumPy 2.5.1、OpenCV 4.14.0 下为 `57 passed`。
+- 当前合并后的公开候选版本记录为 `216 passed, 2 skipped`。
+- 已验证接口枚举；公开机器上的管理员权限实时抓包仍需单独执行。
+- 历史 PCAP、PGM、JSON、CSV、K/D、R/t 与 Attempt 输出有意不进入公共源码仓库。
 
 ## License
 
-本仓库采用 MIT License 发布。这里仅覆盖 host 侧 Python 接收端；FPGA/RTL 侧（包括第三方 Ethernet IP，许可证为 CERN-OHL-S）位于单独仓库中，不属于本许可范围。
-
-## 状态
-
-- 已验证：`.venv` 已创建，`scapy` 与 `pytest` 已安装，`python -m taxi_receiver.cli --list` 能列出本机网卡。
-- 已验证：这个 host-only 副本的 `pytest` 结果是 157 passed、2 skipped。
-- 与 docs/techical docs/word tasksheet/07_更新后的Python接收机架构演进与机制.md 和 08_更新后的Python接收机复刻与压测指南.md 中记录的 `154 passed` 相比，这个 host-only 副本在新目录下重新标定为 `157 passed / 2 skipped`。
-- 本次会话未验证：真正对一个受限权限的 live 接口做实时抓包，因为这里只做了网卡枚举。
-- 按设计跳过：`tests/test_pcap_stdlib.py` 依赖的两个仓库外 pcapng 回归产物在这个 host-only 副本里不存在，所以测试以明确 reason skip。
-- 已知限制：S2 live capture 用 Ctrl+C 停止时，图像文件本身是完整的，但 IMAGE PUBLICATION 计数可能显示 0。
-
-## 相关说明
-
-- [README.md](README.md)
-- [CHEATSHEET.md](CHEATSHEET.md)
-- [docs/notes/p11_python_receiver_performance_optimization.md](docs/notes/p11_python_receiver_performance_optimization.md)
+本仓库采用 MIT License。FPGA 仓库以及由使用者另行获取的第三方硬件依赖保留各自许可证，本仓库不会对它们重新授权。

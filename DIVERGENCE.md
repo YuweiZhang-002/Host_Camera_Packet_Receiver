@@ -20,3 +20,17 @@ This file records every phase-2 change made to the copied host repository so the
 | `.gitignore` | Added `.pytest_tmp/` for the in-repo pytest basetemp used by verification. | Keep local test runs from polluting `git status`. |
 | `LICENSE` | Added a new MIT license file in the host repository only. | The source workspace was left unchanged, per phase-2 requirements. |
 | Repository scan | No vendored third-party source code was copied into the host repo; `scapy` and `pytest` are declared as runtime/test dependencies only. | Satisfy the no-vendored-code check and keep third-party code out of the repository tree. |
+
+## Calibration publication extension (2026-08-29)
+
+| File or group | Change | Why |
+|---|---|---|
+| `calibrate_binary_camera*.py`, `preflight_calibration_frames.py`, `validate_binary_calibration.py` | Copied the intrinsic-calibration CLI entry points from FPGA workspace commit `7c6f9d1`. | The host repository is the public owner of image processing and calibration; the FPGA repository only links to it. |
+| `build_stereo_pairs.py`, `calibrate_binary_stereo.py`, `validate_binary_extrinsics.py` | Copied the stereo pairing, fixed-K/D solve, and independent holdout entry points from commit `7c6f9d1`. | Publish the complete host-side extrinsic workflow without calibration data or historical Attempt outputs. |
+| `taxi_receiver/*calibration*.py`, `taxi_receiver/extrinsic_*.py`, `taxi_receiver/stereo_*.py` | Copied the corresponding implementation modules from commit `7c6f9d1`. | Keep CLI and implementation code in the same independently testable repository. |
+| Seven calibration/stereo test files | Copied the calibration regression suite; the source baseline produced `57 passed`. | Preserve point-set, calibration, stereo-pairing, and validation invariants during migration. |
+| `requirements-calibration.txt` | Added NumPy and pinned OpenCV to `<5`. | OpenCV 5.0.0.93 has a documented multi-view fisheye regression in this project; this is a dependency constraint, not vendored code. |
+| `scripts_ps/run_intrinsic_calibration.ps1` | Added a portable preflight/training/V1/V2 runner with dry-run behavior and a run manifest. | Replace Attempt-specific command fragments with one public entry point. |
+| `scripts_ps/run_extrinsic_calibration.ps1` | Added a portable static-threshold/training/V1/V2 runner that enforces matching intrinsic point sets. | Make the fixed-intrinsic stereo workflow reproducible while retaining all quality gates. |
+| `docs/calibration_pipeline*.md` | Added English and Chinese calibration runbooks with complete PowerShell examples and evidence boundaries. | Explain inputs, output ownership, quality statuses, and why numerical solve success is not physical release. |
+| `README.zh-CN.md`, `COPY_MANIFEST.md` | Reconstructed text that had been stored as mojibake. | Restore readable public documentation without changing receiver behavior. |

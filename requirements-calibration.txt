@@ -1,0 +1,4 @@
+# Offline only; the live receiver hot path does not import either package.
+numpy>=1.24
+# OpenCV 5.0.0.93 has a Python fisheye.calibrate multi-view regression.
+opencv-python-headless>=4.8,<5
