@@ -2,164 +2,140 @@
 
 [中文说明](README.zh-CN.md)
 
-Host-side Python receiver for FPGA-originated raw Ethernet image rows. The board sends EtherType `0x88B5` frames with fixed 128-byte packets; this repository receives, validates, reassembles, archives, and optionally republishes them on the PC side.
+Host-side Python receiver and calibration toolkit for FPGA-originated raw-Ethernet camera rows. It receives fixed 128-byte payload packets carried in EtherType `0x88B5` frames, validates packet semantics and CRC status, monitors row continuity, reassembles frames, writes CSV/PGM evidence, and optionally publishes completed images in a separate process.
+
+The FPGA/RTL implementation is maintained separately in [FPGA-Based-Camera-Buffer](https://github.com/YuweiZhang-002/FPGA-Based-Camera-Buffer). This repository owns the detailed host receiver, intrinsic calibration, stereo pairing, extrinsic solve, and independent holdout validation procedures.
 
 ## Architecture
 
-The pipeline is deliberately layered and queue-bounded:
-
 ```mermaid
 flowchart LR
-    NIC[NIC / Npcap] --> Q1[Queue 1: capture packets]
-    Q1 --> W[taxi-worker]
-    W --> L2[Layer 2: Ethernet validation]
-    L2 --> L3[Layer 3: packet parse / CRC]
-    L3 --> L4[Layer 4: stream monitor]
-    L4 --> L5[Layer 5: reassembler]
-    L5 --> Q2[Queue 2: completed-frame output]
-    Q2 --> S1[S1: per-camera lane]
-    S1 --> Q3[Queue 3: rows.csv writer]
-    S1 --> Q4[Queue 4: session audit]
-    S1 --> Q5[Queue 5: storage / image sinks]
-    Q5 --> S2[S2: optional per-camera publisher process]
+    NIC[NIC / Npcap] --> Q1[Bounded capture queue]
+    Q1 --> L2[Ethernet validation]
+    L2 --> L3[Packet parse / CRC audit]
+    L3 --> L4[Sequence and row monitor]
+    L4 --> L5[Frame reassembler]
+    L5 --> Q2[Completed-frame queue]
+    Q2 --> LANES[Per-camera lanes]
+    LANES --> CSV[rows.csv / session audit]
+    LANES --> STORE[Storage]
+    STORE --> PROC[Optional publisher process]
 ```
 
-Queue boundaries matter:
+The queue boundaries are intentional. Capture is isolated from Python processing; reassembly is isolated from slow storage; CSV writing is bounded independently; and `--publish-images process` moves image publication out of the lane thread and its GIL/I/O critical path. A downstream disk or image-conversion stall therefore does not automatically become an ingress packet-loss burst.
 
-- Queue 1 isolates live capture from the Python worker.
-- Queue 2 isolates reassembly from slow storage and image publication.
-- Queue 3 isolates `rows.csv` formatting and flush latency.
-- Queue 4 is the synchronous session audit path.
-- Queue 5 isolates sink failures and lets S2 move image publication off the lane thread.
+The processing depth is often described as six observable layers:
 
-S1 is the per-camera lane split. S2 is the multi-process image publication path.
+| Layer | Responsibility | Main evidence |
+|---|---|---|
+| 1 | Npcap ingress | `Capture ingress`, `ps_recv`, `ps_drop` |
+| 2 | Ethernet length/type validation | matching Ethernet and bad-length counters |
+| 3 | Fixed packet parse and CRC audit | `parsed_ok`, CRC/sync/length errors |
+| 4 | Packet/row continuity monitoring | duplicate, gap, out-of-order and row-jump counters |
+| 5 | Per-camera frame reassembly | completed/incomplete frame records |
+| 6 | CSV, PGM/archive and optional publication | `rows.csv`, `summary.csv`, PGM files, sink counters |
 
-## Release documentation map
+No evidence is promoted across layers: a valid Ethernet frame does not prove a valid camera row; a complete frame does not prove a valid calibration grid; and a low numerical calibration residual does not by itself prove a physically publishable stereo transform.
 
-The complete protocol and reproduction guide is [here](docs/protocol_and_reproduction.md). It covers the required release topics: Project Overview, System Scope, Host Receiver Architecture, 128-byte Packet Format, CRC Audit Path, Npcap Capture Mechanism, Buffer and Queue Configuration, Frame Reassembly, CSV and Image Output, Error Statistics, Installation, Interface Selection, CAM0 Test, CAM1 Test, Dual-camera Test, PCAP Replay, Directory Structure, Testing, Troubleshooting, and Known Limitations.
+## Installation
 
-The current audit rule is explicit: a valid egress CRC with FPGA status `0x10` means the MCU-to-FPGA ingress CRC failed; an invalid egress CRC means the FPGA-to-Ethernet/Host path was corrupted. Both classes remain in session audit, and neither enters normal image CSV or frame reassembly.
-
-## Quick Start
-
-1. Install Npcap on Windows.
-2. Open an elevated PowerShell if you plan to capture live traffic.
-3. Create the local environment:
+Requirements: Windows, Python, and Npcap for live capture. Create an isolated environment:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r .\requirements-live.txt
+.\.venv\Scripts\python.exe -m pip install -r .\requirements-calibration.txt
 ```
 
-4. List interfaces and copy the GUID you want:
+`requirements-calibration.txt` currently constrains OpenCV to `<5` because the project identified a fisheye multi-view regression in OpenCV 5.0.0.93. Dependencies are installed from their package indexes; no third-party source is vendored here.
+
+## Live receiver quick start
+
+List Npcap interfaces and copy the exact device name:
 
 ```powershell
 .\.venv\Scripts\python.exe -m taxi_receiver.cli --list
 ```
 
-5. Run the receiver:
+Capture both cameras into a fresh directory:
 
 ```powershell
-.\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}"
-```
+$interface = '\Device\NPF_{REPLACE-WITH-ACTUAL-GUID}'
+$runRoot = Join-Path $PWD ('runs\{0:yyyyMMdd_HHmmss}_dual' -f (Get-Date))
 
-## Common Scenarios
-
-Connectivity blind check:
-
-```powershell
-.\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}" -NoRowsCsv
-```
-
-Line-rate stress test:
-
-```powershell
-.\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}" `
-  -ImagesRoot .\images `
-  -QueueDepth 65536 `
-  -FrameOutputQueueDepth 256 `
+.\run_receiver.ps1 `
+  -Interface $interface `
+  -ImagesRoot $runRoot `
+  -CameraIds '0,1' `
+  -SplitByCamera on `
+  -ImagePolicy strict `
+  -PublishFrames complete `
   -PublishImages process `
-  -PublishFrames complete
+  -CrcMode enabled
 ```
 
-Loss-tolerant frame capture:
+The command remains active until `Ctrl+C`; this is normal for a live receiver. Verify that `$interface` is not a placeholder and that `cam0`/`cam1` directories receive PGM and `rows.csv` outputs.
+
+## Calibration entry points
+
+Use the complete runbook before running calibration:
+
+- [English calibration pipeline](docs/calibration_pipeline.md)
+- [中文标定流程](docs/calibration_pipeline.zh-CN.md)
+
+The public PowerShell wrappers are:
 
 ```powershell
-.\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}" `
-  -ImagesRoot .\images `
-  -OutputRoot .\archive `
-  -ImagePolicy recover-zero-fill `
-  -PublishFrames eligible
+.\scripts_ps\run_intrinsic_calibration.ps1 -PreflightOnly <required paths>
+.\scripts_ps\run_extrinsic_calibration.ps1 -PreflightOnly <required paths>
 ```
 
-Offline replay with the four gates:
+After preflight, remove `-PreflightOnly` to execute. Both scripts support `-WhatIf`, reject non-empty output roots, preserve Training/V1/V2 separation, and write `run_manifest.json`. Intrinsics are solved independently for each camera. Extrinsics freeze both K/D documents, require identical physical point-index sets, solve cam0-to-cam1 R/t from Training pairs, and then validate the frozen transform on independent V1 and V2 pairs.
 
-```powershell
-.\verify_s2.ps1 -ReplayPcap .\build\wire.pcapng -OutRoot .\build\s2_verify
-```
+## Packet and CRC interpretation
 
-## CLI Reference
+The host distinguishes two CRC locations:
 
-| Group | Flags | Purpose |
-|---|---|---|
-| Capture | `--interface`, `--mode`, `--pcap-buffer-size`, `--queue-depth` | Live input and capture buffering |
-| Replay | `--replay-pcap`, `--source-mac` | Offline PCAP/PCAPNG replay |
-| Parse / stage depth | `--reassemble`, `--max-stage` | Stop at Layer 2/3/4/5 as needed |
-| Image policy | `--image-policy`, `--max-missing-rows`, `--max-consecutive-missing` | Strict vs recover-zero-fill |
-| Lane / publisher | `--split-by-camera`, `--camera-ids`, `--publish-images`, `--publisher-queue-depth` | S1 and S2 behavior |
-| Output | `--output-root`, `--images-root`, `--no-rows-csv`, `--session-audit` | Archive and image sinks |
-| Archiving | `--archive-root-policy`, `--archive-collision-policy` | Collision handling for completed frames |
-| Misc | `--report-interval`, `--list`, `--bit-order`, `--frame-timeout` | Reporting and diagnostics |
+- FPGA status bit `0x10` reports the ingress MCU-to-FPGA CRC comparison result when that check is enabled in the FPGA design.
+- The egress packet CRC is recalculated by the FPGA and checked by the host for the FPGA-to-Ethernet/host path.
 
-## Exit Codes
+A correct egress CRC with status `0x10` points upstream of Ethernet. An incorrect egress CRC points to the emitted packet or its transport/capture path. CRC policy is a receiver audit concern and is not a substitute for calibration image-quality validation.
 
-| Code | Meaning |
-|---|---|
-| 0 | Success |
-| 2 | Invalid arguments |
-| 3 | Capture permission problem |
-| 4 | Capture OSError, wrong interface, or missing Npcap |
-| 5 | Scapy missing in the active environment |
-| 6 | Archive root policy rejected the target root |
-| 7 | A sink failed repeatedly or every submitted frame failed |
+## Exit codes and statuses
 
-## Troubleshooting
+The receiver CLI uses its existing code-specific exit meanings documented in [docs/protocol_and_reproduction.md](docs/protocol_and_reproduction.md). Calibration wrappers report `0` only after every requested stage passes; a non-zero Python stage is preserved as a failed run in the manifest and the wrapper stops. Algorithm JSON status values remain authoritative: `acceptable`, `limited`, `unacceptable`, `ready`, `not_ready`, `pass`, and `fail` must not be treated as interchangeable.
 
-The top-level packet-loss model is four layers deep:
+## Troubleshooting order
 
-- `ps_drop` lives in Npcap before Python sees the packet.
-- `Capture queue drops` lives between capture and the shared worker.
-- `Lane queue drops` lives between the shared worker and the per-camera lane.
-- `csv_rows_dropped` lives between the lane and the rows.csv writer.
+Start at the first failing observable point:
 
-A `queue peak` only proves a queue was full at least once. `submit blocked` is the field that proves the sink is the bottleneck.
+1. `ps_recv`/capture ingress: NIC, Npcap permissions, device GUID.
+2. Matching Ethernet: EtherType, physical link, source filtering.
+3. `parsed_ok`: fixed payload length, sync, cam ID, CRC mode.
+4. Row continuity: sequence gaps, duplicates, row jumps.
+5. Frame completion: missing rows and per-camera routing.
+6. Publication: lane drops, CSV drops, publisher queue and disk latency.
+7. Calibration: complete grid, pose diversity, point-set identity and holdout quality.
 
-If live capture looks healthy at the queue level but `ps_drop` rises, reduce per-packet Python cost first.
+Do not diagnose camera calibration from packet arrival alone, and do not diagnose transport loss from a failed circle-grid detection alone.
 
-## Performance Notes
+## Documentation
 
-All numbers below are local measurements from the current Windows host and should be read as machine-specific evidence, not universal claims.
+- [Protocol and reproduction guide](docs/protocol_and_reproduction.md)
+- [Calibration pipeline](docs/calibration_pipeline.md)
+- [Quick reference](CHEATSHEET.md)
+- [Performance optimization evidence](docs/notes/p11_python_receiver_performance_optimization.md)
+- [Migration manifest](COPY_MANIFEST.md)
+- [Differences from the source workspace](DIVERGENCE.md)
 
-- 40,000-packet capture sample on this host: capture callback dropped from 28.8 us/packet to 0.5 us/packet after replacing `Ether(packet_bytes)` with byte slicing; CRC16 moved from 10.5 us/packet to the `binascii.crc_hqx` path, and total packet CPU cost fell from 52.0 us to 13.5 us.
-- Same sample: estimated single-core throughput rose from 19,231 pkt/s to 74,074 pkt/s.
-- 923,514-frame dual-camera load: `--publish-images thread` took 83.7 s, while `--publish-images process` took 65.0 s; lane `submit blocked` fell from 17.8 s + 57.2 s to 0.000 s + 0.000 s.
-- On the 9,179,893-packet live run recorded in the source notes, `ps_drop` fell from 3,047,448 (33.2%) to 0 when packet CPU cost was reduced.
+## Verification status
+
+- The pre-calibration host baseline recorded `157 passed, 2 skipped`.
+- The migrated calibration subset recorded `57 passed` under Python 3.14.6, NumPy 2.5.1, and OpenCV 4.14.0.
+- The combined public candidate currently records `216 passed, 2 skipped`.
+- Live interface enumeration was previously verified; an actual privileged capture must still be verified on the publication machine and NIC.
+- Historical PCAP, PGM, JSON, CSV, K/D, R/t and Attempt outputs are deliberately not included in this public source repository.
 
 ## License
 
-Released under the MIT License. This repository covers the host-side Python receiver only; the FPGA/RTL side (including third-party Ethernet IP under CERN-OHL-S) lives in a separate repository and is not licensed under these terms.
-
-## Status
-
-- Verified: `.venv` exists, `scapy` and `pytest` are installed, and `python -m taxi_receiver.cli --list` enumerates local interfaces.
-- Verified: `pytest` in this host-only copy reports 157 passed and 2 skipped.
-- Compared with docs/techical docs/word tasksheet/07_更新后的Python接收机架构演进与机制.md and 08_更新后的Python接收机复刻与压测指南.md, which recorded `154 passed`, this host-only copy is re-baselined at `157 passed / 2 skipped` in the new layout.
-- Unverified in this session: a real live capture session on a privileged interface, because this stage only exercised interface enumeration.
-- Unverified by design: the two repository-external pcapng regressions used by `tests/test_pcap_stdlib.py` are absent in this host-only copy, so those tests are skipped with an explicit reason.
-- Known limitation: stopping S2 live capture with Ctrl+C can leave the image-publication counter at 0 even though the image files on disk are complete.
-
-## Related Notes
-
-- [README.zh-CN.md](README.zh-CN.md)
-- [CHEATSHEET.md](CHEATSHEET.md)
-- [docs/notes/p11_python_receiver_performance_optimization.md](docs/notes/p11_python_receiver_performance_optimization.md)
+Released under the MIT License. The FPGA repository and its separately obtained third-party hardware dependencies retain their own licenses; this repository's MIT license does not relicense them.

@@ -13,3 +13,8 @@ images/
 archive/
 build/
 run_*/
+calibration_configs/
+calibration_runs/
+*_intrinsics.json
+*_extrinsics.json
+*.views.csv
