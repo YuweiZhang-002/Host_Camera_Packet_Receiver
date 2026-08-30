@@ -10,7 +10,7 @@ JSON 元数据，不参与实时抓包。因此：接收成功、单相机内参
 标定依赖与 live receiver 分开维护：
 
 ```powershell
-$repo = 'D:\prg\prg_cam_host'       # 修改为本机 Host 仓库
+$repo = 'D:\prg\blank_project\Host_Camera_Packet_Receiver' # 修改为本机 Host 仓库
 $python = Join-Path $repo '.venv\Scripts\python.exe'
 
 Set-Location $repo
@@ -32,12 +32,12 @@ OpenCV 4.14.0；这些是一次环境证据，不是强制锁死的唯一版本�
 
 ```powershell
 $entryPoints = @(
-  'preflight_calibration_frames.py',
-  'calibrate_binary_camera.py',
-  'validate_binary_calibration.py',
-  'build_stereo_pairs.py',
-  'calibrate_binary_stereo.py',
-  'validate_binary_extrinsics.py'
+  'scripts_py\calibration\preflight_calibration_frames.py',
+  'scripts_py\calibration\calibrate_binary_camera.py',
+  'scripts_py\calibration\validate_binary_calibration.py',
+  'scripts_py\calibration\build_stereo_pairs.py',
+  'scripts_py\calibration\calibrate_binary_stereo.py',
+  'scripts_py\calibration\validate_binary_extrinsics.py'
 )
 
 foreach ($entry in $entryPoints) {
@@ -79,7 +79,7 @@ PGM 是二值图像；同名 JSON 记录 frame/timestamp 等元数据。双目�
 管理员 PowerShell：
 
 ```powershell
-$repo = 'D:\prg\prg_cam_host'
+$repo = 'D:\prg\blank_project\Host_Camera_Packet_Receiver'
 $python = Join-Path $repo '.venv\Scripts\python.exe'
 
 Set-Location $repo
@@ -95,7 +95,7 @@ $interface = '\Device\NPF_{REPLACE-WITH-REAL-GUID}'
 ### 3.2 每个数据集启动一个全新接收目录
 
 ```powershell
-$repo = 'D:\prg\prg_cam_host'
+$repo = 'D:\prg\blank_project\Host_Camera_Packet_Receiver'
 $dataRoot = 'D:\camera_runs'        # 修改为本机仓库外数据盘
 $runId = Get-Date -Format 'yyyyMMdd_HHmmss'
 $captureRoot = Join-Path $dataRoot "${runId}_stereo_train"
@@ -107,7 +107,7 @@ if (Test-Path -LiteralPath $captureRoot) {
 New-Item -ItemType Directory -Path $captureRoot | Out-Null
 
 Set-Location $repo
-.\run_receiver.ps1 `
+.\scripts_ps\capture\run_receiver.ps1 `
   -Interface $interface `
   -ImagesRoot $captureRoot `
   -ExpectedRows 480 `
@@ -140,14 +140,14 @@ launcher 的 PowerShell 参数，不能复制到这里。
 在窗口 B 观察 cam0：
 
 ```powershell
-$repo = 'D:\prg\prg_cam_host'
+$repo = 'D:\prg\blank_project\Host_Camera_Packet_Receiver'
 $python = Join-Path $repo '.venv\Scripts\python.exe'
 $captureRoot = '<与接收窗口完全相同的路径>'
 $liveRoot = Join-Path $captureRoot '_live_audit'
 
 New-Item -ItemType Directory -Force -Path $liveRoot | Out-Null
 
-& $python (Join-Path $repo 'preflight_calibration_frames.py') `
+& $python (Join-Path $repo 'scripts_py\calibration\preflight_calibration_frames.py') `
   (Join-Path $captureRoot 'cam0') `
   --watch `
   --poll-interval 1 `
@@ -177,7 +177,7 @@ New-Item -ItemType Directory -Force -Path $liveRoot | Out-Null
 ### 4.2 先做不写盘检查
 
 ```powershell
-$repo = 'D:\prg\prg_cam_host'
+$repo = 'D:\prg\blank_project\Host_Camera_Packet_Receiver'
 $python = Join-Path $repo '.venv\Scripts\python.exe'
 $dataRoot = 'D:\camera_runs'
 
@@ -186,7 +186,7 @@ $holdoutV1Cam = Join-Path $dataRoot 'cam0_intrinsic_holdout_v1\cam0'
 $holdoutV2Cam = Join-Path $dataRoot 'cam0_intrinsic_holdout_v2\cam0'
 $auditRoot = Join-Path $dataRoot 'audit\cam0_intrinsic_run01'
 
-& (Join-Path $repo 'scripts_ps\run_intrinsic_calibration.ps1') `
+& (Join-Path $repo 'scripts_ps\calibration\run_intrinsic_calibration.ps1') `
   -CameraId 0 `
   -TrainingRoot $trainCam `
   -HoldoutV1Root $holdoutV1Cam `
@@ -208,7 +208,7 @@ $auditRoot = Join-Path $dataRoot 'audit\cam0_intrinsic_run01'
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
-  .\scripts_ps\run_intrinsic_calibration.ps1 `
+  .\scripts_ps\calibration\run_intrinsic_calibration.ps1 `
   -PreflightOnly <其余必填参数>
 ```
 
@@ -261,7 +261,7 @@ Training 建议 15–20 个真实停留位置：每个位置稳定 2–3 秒，�
 ### 5.2 Preflight
 
 ```powershell
-$repo = 'D:\prg\prg_cam_host'
+$repo = 'D:\prg\blank_project\Host_Camera_Packet_Receiver'
 $python = Join-Path $repo '.venv\Scripts\python.exe'
 $dataRoot = 'D:\camera_runs'
 
@@ -273,7 +273,7 @@ $cam0Intrinsic = Join-Path $dataRoot 'intrinsics\cam0_intrinsics.json'
 $cam1Intrinsic = Join-Path $dataRoot 'intrinsics\cam1_intrinsics.json'
 $auditRoot = Join-Path $dataRoot 'audit\stereo_run01'
 
-& (Join-Path $repo 'scripts_ps\run_extrinsic_calibration.ps1') `
+& (Join-Path $repo 'scripts_ps\calibration\run_extrinsic_calibration.ps1') `
   -StaticRoot $staticRoot `
   -TrainingRoot $trainRoot `
   -HoldoutV1Root $v1Root `
@@ -360,7 +360,7 @@ Python 标定入口的核心退出语义：
 ## 7. 发布前测试
 
 ```powershell
-$repo = 'D:\prg\prg_cam_host'
+$repo = 'D:\prg\blank_project\Host_Camera_Packet_Receiver'
 $python = Join-Path $repo '.venv\Scripts\python.exe'
 
 Set-Location $repo

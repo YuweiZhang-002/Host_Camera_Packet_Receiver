@@ -6,6 +6,7 @@ from taxi_receiver.packet_format import (
     ByteStreamFramer,
     FLAG_FRAME_OVERFLOW,
     FLAG_FIRST_ROW,
+    FLAG_FIRST_PROCESSED_ROW,
     FLAG_LAST_ROW,
     FLAG_LENGTH_ERROR,
     FPGA_STATUS_CRC_ERROR,
@@ -27,6 +28,7 @@ def test_live_wire_flag_assignments():
     assert FLAG_FRAME_OVERFLOW == 0x01
     assert FLAG_LAST_ROW == 0x02
     assert FLAG_FIRST_ROW == 0x04
+    assert FLAG_FIRST_PROCESSED_ROW == 0x04
     assert FLAG_LENGTH_ERROR == 0x08
     assert FPGA_STATUS_CRC_ERROR == 0x10
 
@@ -45,7 +47,8 @@ def test_round_trip_ok():
     assert pkt.header.frame_id == 100
     assert pkt.header.row_idx == 5
     assert pkt.header.row_seq == 42
-    assert pkt.first_row is True
+    assert pkt.first_row is False
+    assert pkt.first_processed_row is True
     assert pkt.last_row is False
     assert pkt.payload == payload
 
@@ -69,11 +72,12 @@ def test_fpga_status_is_separate_from_raw_mcu_row_flags():
     assert packet.header.row_flags == FLAG_FIRST_ROW
     assert packet.header.fpga_status == FPGA_STATUS_LENGTH_ERROR
     assert packet.header.header_check == 0x5A
-    assert packet.first_row
+    assert not packet.first_row
+    assert packet.first_processed_row
     assert packet.length_error
 
 
-def test_current_metadata_is_big_endian_but_crc_tail_is_little_endian():
+def test_current_metadata_and_crc_tail_are_big_endian():
     raw = build_camera_row(
         cam_id=0,
         frame_id=0x1234,
@@ -95,7 +99,7 @@ def test_current_metadata_is_big_endian_but_crc_tail_is_little_endian():
     assert raw[11:13] == bytes.fromhex("abcd")
     assert raw[114:118] == bytes.fromhex("10203040")
     assert raw[118:122] == bytes.fromhex("11223344")
-    assert raw[126:128] == packet.calculated_crc.to_bytes(2, "little")
+    assert raw[126:128] == packet.calculated_crc.to_bytes(2, "big")
     assert packet.header.frame_id == 0x1234
     assert packet.header.row_idx == 0x01DF
     assert packet.header.row_seq == 0xABCD

@@ -63,15 +63,14 @@ Capture both cameras into a fresh directory:
 $interface = '\Device\NPF_{REPLACE-WITH-ACTUAL-GUID}'
 $runRoot = Join-Path $PWD ('runs\{0:yyyyMMdd_HHmmss}_dual' -f (Get-Date))
 
-.\run_receiver.ps1 `
+.\scripts_ps\capture\run_receiver.ps1 `
   -Interface $interface `
   -ImagesRoot $runRoot `
   -CameraIds '0,1' `
   -SplitByCamera on `
   -ImagePolicy strict `
   -PublishFrames complete `
-  -PublishImages process `
-  -CrcMode enabled
+  -PublishImages process
 ```
 
 The command remains active until `Ctrl+C`; this is normal for a live receiver. Verify that `$interface` is not a placeholder and that `cam0`/`cam1` directories receive PGM and `rows.csv` outputs.
@@ -86,8 +85,8 @@ Use the complete runbook before running calibration:
 The public PowerShell wrappers are:
 
 ```powershell
-.\scripts_ps\run_intrinsic_calibration.ps1 -PreflightOnly <required paths>
-.\scripts_ps\run_extrinsic_calibration.ps1 -PreflightOnly <required paths>
+.\scripts_ps\calibration\run_intrinsic_calibration.ps1 -PreflightOnly <required paths>
+.\scripts_ps\calibration\run_extrinsic_calibration.ps1 -PreflightOnly <required paths>
 ```
 
 After preflight, remove `-PreflightOnly` to execute. Both scripts support `-WhatIf`, reject non-empty output roots, preserve Training/V1/V2 separation, and write `run_manifest.json`. Intrinsics are solved independently for each camera. Extrinsics freeze both K/D documents, require identical physical point-index sets, solve cam0-to-cam1 R/t from Training pairs, and then validate the frozen transform on independent V1 and V2 pairs.

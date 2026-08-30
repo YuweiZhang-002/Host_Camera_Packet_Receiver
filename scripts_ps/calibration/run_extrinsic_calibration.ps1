@@ -21,9 +21,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$OutputRoot,
 
-    [string]$PythonExe = [IO.Path]::GetFullPath(
-        (Join-Path $PSScriptRoot '..\.venv\Scripts\python.exe')
-    ),
+    [string]$PythonExe = '',
 
     [ValidateSet(
         'stationary',
@@ -62,10 +60,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$pairScript = Join-Path $repoRoot 'build_stereo_pairs.py'
-$solveScript = Join-Path $repoRoot 'calibrate_binary_stereo.py'
-$validationScript = Join-Path $repoRoot 'validate_binary_extrinsics.py'
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+if ([string]::IsNullOrWhiteSpace($PythonExe)) {
+    $PythonExe = Join-Path $repoRoot '.venv\Scripts\python.exe'
+}
+$calibrationCliRoot = Join-Path $repoRoot 'scripts_py\calibration'
+$pairScript = Join-Path $calibrationCliRoot 'build_stereo_pairs.py'
+$solveScript = Join-Path $calibrationCliRoot 'calibrate_binary_stereo.py'
+$validationScript = Join-Path $calibrationCliRoot 'validate_binary_extrinsics.py'
 
 $repositoryHead = 'UNVERIFIED'
 $repositoryDirty = $null

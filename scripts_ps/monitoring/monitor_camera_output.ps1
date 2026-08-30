@@ -3,7 +3,7 @@
  # Paths are derived from $PSScriptRoot instead of a fixed drive letter.
 param(
     [Parameter(Mandatory = $true)]
-    [string]$ImagesRoot = (Join-Path $PSScriptRoot 'images'),
+    [string]$ImagesRoot = '',
 
     [string]$OutputRoot = '',
 
@@ -11,6 +11,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+if ([string]::IsNullOrWhiteSpace($ImagesRoot)) {
+    $ImagesRoot = Join-Path $repoRoot 'images'
+}
 $resolvedImages = [IO.Path]::GetFullPath($ImagesRoot)
 $resolvedOutput = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     $null

@@ -64,25 +64,25 @@ $python = '<PYTHON_EXE>'
 CAM0：
 
 ```powershell
-.\run_receiver.ps1 -Interface '\\Device\\NPF_{<NPF_INTERFACE>}' -CameraIds '0' -SplitByCamera on -ImagesRoot '<OUTPUT_ROOT>\cam0' -RowsCsv '<OUTPUT_ROOT>\cam0\rows_v2.csv' -SessionAudit '<OUTPUT_ROOT>\cam0\session_audit_v2.csv'
+.\scripts_ps\capture\run_receiver.ps1 -Interface '\\Device\\NPF_{<NPF_INTERFACE>}' -CameraIds '0' -SplitByCamera on -ImagesRoot '<OUTPUT_ROOT>\images' -OutputRoot '<OUTPUT_ROOT>\archive' -SessionAudit on
 ```
 
 CAM1：
 
 ```powershell
-.\run_receiver.ps1 -Interface '\\Device\\NPF_{<NPF_INTERFACE>}' -CameraIds '1' -SplitByCamera on -ImagesRoot '<OUTPUT_ROOT>\cam1' -RowsCsv '<OUTPUT_ROOT>\cam1\rows_v2.csv' -SessionAudit '<OUTPUT_ROOT>\cam1\session_audit_v2.csv'
+.\scripts_ps\capture\run_receiver.ps1 -Interface '\\Device\\NPF_{<NPF_INTERFACE>}' -CameraIds '1' -SplitByCamera on -ImagesRoot '<OUTPUT_ROOT>\images' -OutputRoot '<OUTPUT_ROOT>\archive' -SessionAudit on
 ```
 
 双相机：
 
 ```powershell
-.\run_receiver.ps1 -Interface '\\Device\\NPF_{<NPF_INTERFACE>}' -CameraIds '0,1' -SplitByCamera on -ImagesRoot '<OUTPUT_ROOT>\images' -QueueDepth 65536 -FrameOutputQueueDepth 256 -PublishImages process -PublishFrames complete -SessionAudit '<OUTPUT_ROOT>\session_audit_v2.csv'
+.\scripts_ps\capture\run_receiver.ps1 -Interface '\\Device\\NPF_{<NPF_INTERFACE>}' -CameraIds '0,1' -SplitByCamera on -ImagesRoot '<OUTPUT_ROOT>\images' -OutputRoot '<OUTPUT_ROOT>\archive' -QueueDepth 65536 -FrameOutputQueueDepth 256 -PublishImages process -PublishFrames complete -SessionAudit on
 ```
 
 PCAP 回放：
 
 ```powershell
-.\verify_s2.ps1 -ReplayPcap '<PCAP_FILE>' -OutRoot '<OUTPUT_ROOT>\pcap_replay'
+.\scripts_ps\diagnostics\verify_s2.ps1 -ReplayPcap '<PCAP_FILE>' -OutRoot '<OUTPUT_ROOT>\pcap_replay'
 ```
 
 ## 4. 输出与策略
