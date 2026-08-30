@@ -21,7 +21,9 @@ The absolute paths above identify the migration workstation only. Public command
 - Root receiver, replay, verification, calibration and analysis entry points.
 - `tests/`: synthetic receiver regressions and public calibration regressions.
 - `requirements-live.txt` and `requirements-calibration.txt`.
-- Documentation, license, quick reference, divergence record, and this manifest.
+- Documentation, BSD 3-Clause license, bilingual third-party notices, quick
+  reference, bilingual software requirements, divergence record, and this
+  manifest.
 
 ## Calibration extension
 

@@ -2,6 +2,8 @@
 
 [English README](README.md)
 
+[软件配置与版本要求](SOFTWARE_REQUIREMENTS.zh-CN.md)（[English](SOFTWARE_REQUIREMENTS.md)）将离线回放、Npcap 实时采集、自动测试、图像查看和 OpenCV 标定所需的软件分开说明，并记录 2026-08-30 收官环境中实际观察到的版本。首次安装前应先阅读该文档。
+
 这是 PRG_CAM 的上位机 Python 接收与标定仓库。它接收 FPGA 发出的 EtherType `0x88B5` 原始以太网帧，处理固定 128 字节 payload，完成包格式与 CRC 审计、行连续性监控、帧重组、CSV/PGM 落盘，以及可选的独立进程图像发布。
 
 FPGA/RTL 实现位于独立仓库 [FPGA-Based-Camera-Buffer](https://github.com/YuweiZhang-002/FPGA-Based-Camera-Buffer)。本仓库负责详细的六层接收机、单相机内参、双目配对、固定 K/D 外参求解与独立 holdout 验证。
@@ -131,4 +133,4 @@ $runRoot = Join-Path $PWD ('runs\{0:yyyyMMdd_HHmmss}_dual' -f (Get-Date))
 
 ## License
 
-本仓库采用 MIT License。FPGA 仓库以及由使用者另行获取的第三方硬件依赖保留各自许可证，本仓库不会对它们重新授权。
+本仓库的原创内容采用与 MCU、FPGA 仓库一致的 [BSD 3-Clause License](LICENSE)。Scapy、pytest、NumPy、OpenCV、Npcap、FPGA 仓库及使用者另行获取的 FPGA 硬件依赖保留各自许可，BSD-3-Clause 不会对它们重新授权。打包或重新分发前必须阅读[中文第三方通知](THIRD_PARTY_NOTICES.zh-CN.md)（[English](THIRD_PARTY_NOTICES.md)）。

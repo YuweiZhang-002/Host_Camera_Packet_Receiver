@@ -34,3 +34,18 @@ This file records every phase-2 change made to the copied host repository so the
 | `scripts_ps/calibration/run_extrinsic_calibration.ps1` | Added a portable static-threshold/training/V1/V2 runner that enforces matching intrinsic point sets. | Make the fixed-intrinsic stereo workflow reproducible while retaining all quality gates. |
 | `docs/calibration_pipeline*.md` | Added English and Chinese calibration runbooks with complete PowerShell examples and evidence boundaries. | Explain inputs, output ownership, quality statuses, and why numerical solve success is not physical release. |
 | `README.zh-CN.md`, `COPY_MANIFEST.md` | Reconstructed text that had been stored as mojibake. | Restore readable public documentation without changing receiver behavior. |
+
+## Licence governance update (2026-08-30)
+
+| File | Change | Why |
+|---|---|---|
+| `LICENSE` | Replaced the MIT text for the current repository revision with BSD 3-Clause. | Align first-party Host and MCU licensing as directed by the copyright holder. Copies already received under the earlier MIT grant are not retroactively relicensed. |
+| `THIRD_PARTY_NOTICES*.md` | Added bilingual Scapy, pytest, NumPy, OpenCV, Npcap, and cross-repository licence boundaries. | Make clear that the first-party BSD licence does not relicense packages, drivers, FPGA dependencies, or combined distributions. |
+| `README*.md` | Updated the licence summary and linked the detailed notice. | Keep the public landing pages consistent with the current licence. |
+
+## Software-environment documentation update (2026-08-30)
+
+| File | Change | Why |
+|---|---|---|
+| `SOFTWARE_REQUIREMENTS*.md` | Added bilingual, evidence-backed requirements for Python, Npcap, Scapy, pytest, NumPy, OpenCV, Tk, PowerShell, Git, and optional Wireshark. | Preserve the closeout software configuration and distinguish offline, live-capture, test, viewer, and calibration modes without inventing unsupported minimum versions. |
+| `README*.md`, `COPY_MANIFEST.md` | Linked and inventoried the new requirements documents. | Make the environment contract visible during cold-start reproduction and publication review. |

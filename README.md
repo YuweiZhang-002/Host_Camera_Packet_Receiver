@@ -6,6 +6,8 @@ Host-side Python receiver and calibration toolkit for FPGA-originated raw-Ethern
 
 The FPGA/RTL implementation is maintained separately in [FPGA-Based-Camera-Buffer](https://github.com/YuweiZhang-002/FPGA-Based-Camera-Buffer). This repository owns the detailed host receiver, intrinsic calibration, stereo pairing, extrinsic solve, and independent holdout validation procedures.
 
+Before installation, read the [software requirements](SOFTWARE_REQUIREMENTS.md). It separates the requirements for offline replay, live Npcap capture, automated tests, image viewing, and OpenCV calibration, and records the versions actually observed during the 2026-08-30 closeout.
+
 ## Architecture
 
 ```mermaid
@@ -137,4 +139,9 @@ Do not diagnose camera calibration from packet arrival alone, and do not diagnos
 
 ## License
 
-Released under the MIT License. The FPGA repository and its separately obtained third-party hardware dependencies retain their own licenses; this repository's MIT license does not relicense them.
+Original material authored for this repository is released under the
+[BSD 3-Clause License](LICENSE), matching the MCU and FPGA repositories. Scapy, pytest,
+NumPy, OpenCV, Npcap, the FPGA repository, and separately obtained FPGA
+hardware dependencies retain their own terms; BSD-3-Clause does not relicense
+them. Read [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before packaging or
+redistribution.
