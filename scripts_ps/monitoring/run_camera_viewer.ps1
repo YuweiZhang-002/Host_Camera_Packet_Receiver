@@ -2,7 +2,7 @@
  # No Npcap or elevation is required.
  # Paths are derived from $PSScriptRoot instead of a fixed drive letter.
 param(
-    [string]$ArchiveRoot = (Join-Path $PSScriptRoot 'images\temp\archive'),
+    [string]$ArchiveRoot = '',
 
     [string]$Attempt = 'attempt1',
 
@@ -12,11 +12,17 @@ param(
 
     [int]$PollIntervalMs = 50,
 
-    [string]$PythonExe = (Join-Path $PSScriptRoot '.venv\Scripts\python.exe')
+    [string]$PythonExe = ''
 )
 
 $ErrorActionPreference = 'Stop'
-$viewerRoot = $PSScriptRoot
+$viewerRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+if ([string]::IsNullOrWhiteSpace($ArchiveRoot)) {
+    $ArchiveRoot = Join-Path $viewerRoot 'images\temp\archive'
+}
+if ([string]::IsNullOrWhiteSpace($PythonExe)) {
+    $PythonExe = Join-Path $viewerRoot '.venv\Scripts\python.exe'
+}
 Push-Location $viewerRoot
 try {
     & $PythonExe -m taxi_receiver.viewer_cli `

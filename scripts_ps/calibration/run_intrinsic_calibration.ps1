@@ -16,9 +16,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$OutputRoot,
 
-    [string]$PythonExe = [IO.Path]::GetFullPath(
-        (Join-Path $PSScriptRoot '..\.venv\Scripts\python.exe')
-    ),
+    [string]$PythonExe = '',
 
     [ValidateSet('full', 'fix_k4', 'fix_k3_k4')]
     [string]$FisheyeConstraint = 'full',
@@ -38,10 +36,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$preflightScript = Join-Path $repoRoot 'preflight_calibration_frames.py'
-$calibrationScript = Join-Path $repoRoot 'calibrate_binary_camera.py'
-$validationScript = Join-Path $repoRoot 'validate_binary_calibration.py'
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+if ([string]::IsNullOrWhiteSpace($PythonExe)) {
+    $PythonExe = Join-Path $repoRoot '.venv\Scripts\python.exe'
+}
+$calibrationCliRoot = Join-Path $repoRoot 'scripts_py\calibration'
+$preflightScript = Join-Path $calibrationCliRoot 'preflight_calibration_frames.py'
+$calibrationScript = Join-Path $calibrationCliRoot 'calibrate_binary_camera.py'
+$validationScript = Join-Path $calibrationCliRoot 'validate_binary_calibration.py'
 
 $repositoryHead = 'UNVERIFIED'
 $repositoryDirty = $null

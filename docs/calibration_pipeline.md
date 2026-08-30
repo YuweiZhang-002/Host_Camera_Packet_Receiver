@@ -11,7 +11,7 @@ and an intrinsic PASS does not imply a publishable stereo transform.
 ## Environment
 
 ```powershell
-$repo = 'D:\prg\prg_cam_host' # replace on another host
+$repo = 'D:\prg\blank_project\Host_Camera_Packet_Receiver' # replace on another host
 $python = Join-Path $repo '.venv\Scripts\python.exe'
 
 Set-Location $repo
@@ -33,12 +33,12 @@ stereo dataset must contain `cam0/` and `cam1/`; PGM files must retain their
 sidecar frame/timestamp metadata. Do not append a holdout to a training run.
 
 ```powershell
-$repo = 'D:\prg\prg_cam_host'
+$repo = 'D:\prg\blank_project\Host_Camera_Packet_Receiver'
 $python = Join-Path $repo '.venv\Scripts\python.exe'
 $captureRoot = 'D:\camera_runs\20260829_stereo_train' # fresh path
 
 Set-Location $repo
-.\run_receiver.ps1 `
+.\scripts_ps\capture\run_receiver.ps1 `
   -Interface '\Device\NPF_{REPLACE-WITH-REAL-GUID}' `
   -ImagesRoot $captureRoot `
   -ExpectedRows 480 `
@@ -64,7 +64,7 @@ Prepare three independent camera directories: Training, Holdout V1 and
 Holdout V2. Then run the write-free check:
 
 ```powershell
-& .\scripts_ps\run_intrinsic_calibration.ps1 `
+& .\scripts_ps\calibration\run_intrinsic_calibration.ps1 `
   -CameraId 0 `
   -TrainingRoot 'D:\camera_runs\cam0_train\cam0' `
   -HoldoutV1Root 'D:\camera_runs\cam0_holdout_v1\cam0' `
@@ -106,7 +106,7 @@ Inputs are four independent dual-camera runs: Static, Training, Holdout V1 and
 Holdout V2, plus two independently accepted intrinsic JSON files.
 
 ```powershell
-& .\scripts_ps\run_extrinsic_calibration.ps1 `
+& .\scripts_ps\calibration\run_extrinsic_calibration.ps1 `
   -StaticRoot 'D:\camera_runs\stereo_static' `
   -TrainingRoot 'D:\camera_runs\stereo_train' `
   -HoldoutV1Root 'D:\camera_runs\stereo_holdout_v1' `
@@ -150,7 +150,7 @@ use a third window with `cam1` substituted:
 $liveRoot = Join-Path $captureRoot '_live_audit'
 New-Item -ItemType Directory -Force -Path $liveRoot | Out-Null
 
-& $python .\preflight_calibration_frames.py `
+& $python .\scripts_py\calibration\preflight_calibration_frames.py `
   (Join-Path $captureRoot 'cam0') `
   --watch `
   --poll-interval 1 `
@@ -173,7 +173,7 @@ machine-wide policy. Use a process-local override:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
-  .\scripts_ps\run_intrinsic_calibration.ps1 `
+  .\scripts_ps\calibration\run_intrinsic_calibration.ps1 `
   -PreflightOnly <the remaining required parameters>
 ```
 

@@ -14,10 +14,10 @@ can be imported and unit tested without scapy, Npcap, or any hardware
 in the loop -- this is the module every other layer, and every test,
 builds on.
 
-Endianness note: current RP2350A metadata words are emitted MSB byte
-first (wire sync ``A5 A0 5A 50``), while FPGA Byte_Replacer regenerates
-the final CRC low byte first.  The current packet is therefore mixed:
-big-endian header/trailer metadata and little-endian CRC16.
+Endianness note: current RP2350A metadata words and the CRC tail are emitted
+MSB byte first (wire sync ``A5 A0 5A 50``).  The archived
+``A5 A5 5A 5A`` regression vector predates that contract and remains readable
+with its legacy little-endian metadata and CRC tail.
 """
 from __future__ import annotations
 
@@ -31,14 +31,19 @@ TRAILER_LEN = 24
 PACKET_LEN = 128
 ROW_BYTES = PACKET_LEN - HEADER_LEN - TRAILER_LEN  # 80
 
-# Current RP2350A wire semantics, confirmed against the live attempt2 CSV:
-# bit 0 reports a frame/line-buffer overflow, bit 1 terminates the frame, and
-# bit 2 marks the first valid row.  Older project-side code had bit 0 and bit 2
-# swapped; that made every real 0x04 first-row packet look corrupt.
+# Current RP2350A wire semantics: bit 0 reports a frame/line-buffer overflow,
+# bit 1 terminates the frame, and bit 2 marks row 2, the first row for which
+# the MCU's three-row Sobel window is complete.  Frame start is derived from
+# row_idx == 0 and must not be inferred from bit 2.
 FLAG_FRAME_OVERFLOW = 1 << 0
 FLAG_LAST_ROW = 1 << 1
-FLAG_FIRST_ROW = 1 << 2
-SOURCE_ROW_FLAG_MASK = FLAG_FRAME_OVERFLOW | FLAG_LAST_ROW | FLAG_FIRST_ROW
+FLAG_FIRST_PROCESSED_ROW = 1 << 2
+# Compatibility import for older callers.  The name is retained, but its wire
+# meaning is first *processed* row, never frame start.
+FLAG_FIRST_ROW = FLAG_FIRST_PROCESSED_ROW
+SOURCE_ROW_FLAG_MASK = (
+    FLAG_FRAME_OVERFLOW | FLAG_LAST_ROW | FLAG_FIRST_PROCESSED_ROW
+)
 
 # FPGA-owned status is no longer ORed into the MCU row_flags byte.  It occupies
 # pkt_row_header_t.reserved[0] (wire offset 13), keeping the two fault domains
@@ -130,6 +135,7 @@ class CameraRowPacket:
     crc_ok: bool
 
     first_row: bool
+    first_processed_row: bool
     last_row: bool
     frame_overflow: bool
     length_error: bool
@@ -174,7 +180,8 @@ def parse_camera_row(payload: bytes) -> CameraRowPacket:
     (sync0, sync1, cam_id, frame_id, row_idx, row_flags, payload_len,
      row_seq, reserved, row_payload, pad, m00, xc_q4, yc_q4, vx_q8,
      vy_q8) = body_struct.unpack(payload[:_CRC_COVERED_LEN])
-    crc16 = int.from_bytes(payload[_CRC_COVERED_LEN:], "little")
+    crc_byteorder = "little" if payload[:4] == _LEGACY_SYNC_BYTES else "big"
+    crc16 = int.from_bytes(payload[_CRC_COVERED_LEN:], crc_byteorder)
 
     header = RowHeader(sync0, sync1, cam_id, frame_id, row_idx,
                         row_flags, payload_len, row_seq, reserved)
@@ -190,7 +197,8 @@ def parse_camera_row(payload: bytes) -> CameraRowPacket:
         received_crc=crc16,
         calculated_crc=calculated_crc,
         crc_ok=(crc16 == calculated_crc),
-        first_row=bool(row_flags & FLAG_FIRST_ROW),
+        first_row=(row_idx == 0),
+        first_processed_row=bool(row_flags & FLAG_FIRST_PROCESSED_ROW),
         last_row=bool(row_flags & FLAG_LAST_ROW),
         frame_overflow=bool(
             (row_flags & FLAG_FRAME_OVERFLOW)
@@ -257,7 +265,7 @@ def build_camera_row(
     crc = crc16_ccitt_false(body)
     if corrupt_crc:
         crc ^= 0xFFFF
-    return body + struct.pack("<H", crc)
+    return body + struct.pack(">H", crc)
 
 
 class ByteStreamFramer:

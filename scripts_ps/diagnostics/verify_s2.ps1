@@ -22,13 +22,15 @@
 
 .EXAMPLE
     # Deterministic A/B on a capture (recommended first).
-    .\verify_s2.ps1 -ReplayPcap .\build\s1s2_ab\two_camera.pcap `
-                    -OutRoot .\build\s2_verify
+    .\scripts_ps\diagnostics\verify_s2.ps1 `
+      -ReplayPcap .\build\s1s2_ab\two_camera.pcap `
+      -OutRoot .\build\s2_verify
 
 .EXAMPLE
     # Live 60 s per mode against the board.
-    .\verify_s2.ps1 -Interface '\Device\NPF_{...}' -Seconds 60 `
-                    -OutRoot .\build\s2_verify_live
+    .\scripts_ps\diagnostics\verify_s2.ps1 `
+      -Interface '\Device\NPF_{...}' -Seconds 60 `
+      -OutRoot .\build\s2_verify_live
 #>
 [CmdletBinding(DefaultParameterSetName = 'Replay')]
 param(
@@ -52,12 +54,14 @@ param(
     [ValidateSet('complete', 'eligible', 'all')]
     [string]$PublishFrames = 'eligible',
 
-    [string]$PythonExe =
-        (Join-Path $PSScriptRoot '.venv\Scripts\python.exe')
+    [string]$PythonExe = ''
 )
 
 $ErrorActionPreference = 'Stop'
-$receiverRoot = $PSScriptRoot
+$receiverRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+if ([string]::IsNullOrWhiteSpace($PythonExe)) {
+    $PythonExe = Join-Path $receiverRoot '.venv\Scripts\python.exe'
+}
 $isLive = $PSCmdlet.ParameterSetName -eq 'Live'
 
 if (Test-Path $OutRoot) { Remove-Item -Recurse -Force $OutRoot }

@@ -1,6 +1,7 @@
  # Host-side live receiver launcher for taxi_receiver.
  # Requires an elevated shell and Npcap when using a real interface.
- # Defaults are derived from $PSScriptRoot and the local .venv.
+ # Defaults are derived from the repository root and the local .venv.
+[CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [Parameter(Mandatory = $true)]
     [string]$Interface,
@@ -17,7 +18,7 @@ param(
 
     [int]$FrameOutputQueueDepth = 256,
 
-    [string]$ImagesRoot = (Join-Path $PSScriptRoot 'images'),
+    [string]$ImagesRoot = '',
 
     [ValidateSet('strict', 'recover-zero-fill')]
     [string]$ImagePolicy = 'strict',
@@ -61,12 +62,17 @@ param(
 
     [switch]$NoRowsCsv,
 
-    [string]$PythonExe =
-        (Join-Path $PSScriptRoot '.venv\Scripts\python.exe')
+    [string]$PythonExe = ''
 )
 
 $ErrorActionPreference = 'Stop'
-$receiverRoot = $PSScriptRoot
+$receiverRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+if ([string]::IsNullOrWhiteSpace($ImagesRoot)) {
+    $ImagesRoot = Join-Path $receiverRoot 'images'
+}
+if ([string]::IsNullOrWhiteSpace($PythonExe)) {
+    $PythonExe = Join-Path $receiverRoot '.venv\Scripts\python.exe'
+}
 $ImagesRoot = [IO.Path]::GetFullPath($ImagesRoot)
 
 $receiverArgs = @(
@@ -97,6 +103,16 @@ if (-not [string]::IsNullOrWhiteSpace($OutputRoot)) {
 }
 if ($NoRowsCsv) {
     $receiverArgs += '--no-rows-csv'
+}
+
+if (-not $PSCmdlet.ShouldProcess(
+    $ImagesRoot,
+    "start receiver on $Interface with Python $PythonExe"
+)) {
+    Write-Host "Repository root: $receiverRoot"
+    Write-Host "Python: $PythonExe"
+    Write-Host "Arguments: $($receiverArgs -join ' ')"
+    exit 0
 }
 
 Push-Location $receiverRoot

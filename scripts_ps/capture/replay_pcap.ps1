@@ -1,6 +1,6 @@
  # Offline replay launcher for host-side regression captures.
  # No Npcap is required in replay mode, but the local .venv must exist.
- # Paths are derived from $PSScriptRoot instead of a fixed drive letter.
+ # Paths are derived from the repository root instead of a fixed drive letter.
 param(
     [Parameter(Mandatory = $true)]
     [string]$Pcap,
@@ -12,12 +12,14 @@ param(
 
     [string]$ImagesRoot = '',
 
-    [string]$PythonExe =
-        (Join-Path $PSScriptRoot '.venv\Scripts\python.exe')
+    [string]$PythonExe = ''
 )
 
 $ErrorActionPreference = 'Stop'
-$receiverRoot = $PSScriptRoot
+$receiverRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+if ([string]::IsNullOrWhiteSpace($PythonExe)) {
+    $PythonExe = Join-Path $receiverRoot '.venv\Scripts\python.exe'
+}
 Push-Location $receiverRoot
 try {
     $receiverArgs = @(

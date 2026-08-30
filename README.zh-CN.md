@@ -63,15 +63,14 @@ python -m venv .venv
 $interface = '\Device\NPF_{替换为真实GUID}'
 $runRoot = Join-Path $PWD ('runs\{0:yyyyMMdd_HHmmss}_dual' -f (Get-Date))
 
-.\run_receiver.ps1 `
+.\scripts_ps\capture\run_receiver.ps1 `
   -Interface $interface `
   -ImagesRoot $runRoot `
   -CameraIds '0,1' `
   -SplitByCamera on `
   -ImagePolicy strict `
   -PublishFrames complete `
-  -PublishImages process `
-  -CrcMode enabled
+  -PublishImages process
 ```
 
 接收机在按下 `Ctrl+C` 前持续运行，这是正常行为。必须确认 `$interface` 不是占位符，并观察 `$runRoot\cam0` 与 `$runRoot\cam1` 是否持续生成 PGM 和 `rows.csv`。
@@ -86,8 +85,8 @@ $runRoot = Join-Path $PWD ('runs\{0:yyyyMMdd_HHmmss}_dual' -f (Get-Date))
 两个公共 PowerShell 入口为：
 
 ```powershell
-.\scripts_ps\run_intrinsic_calibration.ps1 -PreflightOnly <补齐必填路径>
-.\scripts_ps\run_extrinsic_calibration.ps1 -PreflightOnly <补齐必填路径>
+.\scripts_ps\calibration\run_intrinsic_calibration.ps1 -PreflightOnly <补齐必填路径>
+.\scripts_ps\calibration\run_extrinsic_calibration.ps1 -PreflightOnly <补齐必填路径>
 ```
 
 预检通过后去掉 `-PreflightOnly` 才会真正计算。两个脚本都支持 `-WhatIf`，拒绝复用非空输出目录，严格区分 Training、V1、V2，并写出 `run_manifest.json`。内参按相机独立求解；外参冻结两份 K/D，要求两机使用完全相同的物理点索引集，在 Training 求 cam0→cam1 的 R/t，再由独立 V1/V2 验证冻结结果。

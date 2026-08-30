@@ -13,19 +13,19 @@ python -m venv .venv
 ## Live capture
 
 ```powershell
-.\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}"
+.\scripts_ps\capture\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}"
 ```
 
 ## Live capture without rows.csv
 
 ```powershell
-.\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}" -NoRowsCsv
+.\scripts_ps\capture\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}" -NoRowsCsv
 ```
 
 ## Throughput test
 
 ```powershell
-.\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}" `
+.\scripts_ps\capture\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}" `
   -ImagesRoot .\images `
   -QueueDepth 65536 `
   -FrameOutputQueueDepth 256 `
@@ -36,7 +36,7 @@ python -m venv .venv
 ## Loss-tolerant archive capture
 
 ```powershell
-.\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}" `
+.\scripts_ps\capture\run_receiver.ps1 -Interface "\\Device\\NPF_{YOUR-GUID}" `
   -ImagesRoot .\images `
   -OutputRoot .\archive `
   -ImagePolicy recover-zero-fill `
@@ -46,19 +46,19 @@ python -m venv .venv
 ## Offline replay with verification
 
 ```powershell
-.\verify_s2.ps1 -ReplayPcap .\build\wire.pcapng -OutRoot .\build\s2_verify
+.\scripts_ps\diagnostics\verify_s2.ps1 -ReplayPcap .\build\wire.pcapng -OutRoot .\build\s2_verify
 ```
 
 ## Viewer
 
 ```powershell
-.\run_camera_viewer.ps1
+.\scripts_ps\monitoring\run_camera_viewer.ps1
 ```
 
 ## Folder monitor
 
 ```powershell
-.\monitor_camera_output.ps1 -ImagesRoot .\images
+.\scripts_ps\monitoring\monitor_camera_output.ps1 -ImagesRoot .\images
 ```
 
 ## Notes

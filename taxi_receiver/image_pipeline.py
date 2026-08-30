@@ -43,7 +43,6 @@ from typing import Any, Callable, TextIO
 import uuid
 
 from .packet_format import (
-    FLAG_FIRST_ROW,
     FLAG_LAST_ROW,
     ROW_BYTES,
     SYNC0_DEFAULT,
@@ -73,6 +72,7 @@ ROW_CSV_FIELDS = (
     "fpga_status",
     "header_check",
     "first_row",
+    "first_processed_row",
     "last_row",
     "frame_overflow",
     "length_error",
@@ -96,8 +96,9 @@ ROW_CSV_FIELDS = (
     "vx",
     "vy",
     "parse_ok",
-    # Trust columns.  ``first_row``/``last_row``/``frame_end`` above stay as
-    # raw-flag evidence; these four say whether that evidence may be counted.
+    # Trust columns.  ``first_processed_row`` and ``last_row`` preserve sender
+    # flag evidence; ``first_row`` is derived from row_idx == 0.  These four
+    # say whether the row evidence may be counted.
     "layer3_valid",
     "row_accepted",
     "reliable_first",
@@ -650,14 +651,12 @@ class CameraImagePipeline:
             if row_accepted:
                 sink.mirror_rows.add(header.row_idx)
 
-            # A LAST/FIRST bit is only counted when Layer 3 validated the
-            # packet AND the row index is where that bit belongs.  attempt2
-            # had 834 raw LAST bits but only 832 real frame ends: the other
-            # two were 0xFF byte-bleed into row 255's flag byte.
+            # Frame start is a row-index property.  Offset-9 bit 2 means the
+            # first MCU-processed Sobel row (row 2), not row 0.  LAST remains
+            # a sender flag and is accepted only at the expected final row.
             reliable_first = (
                 layer3_valid
                 and header.row_idx == 0
-                and bool(flags & FLAG_FIRST_ROW)
             )
             reliable_last = (
                 layer3_valid
@@ -675,7 +674,8 @@ class CameraImagePipeline:
                 "row_idx": header.row_idx,
                 "row_seq": header.row_seq,
                 "row_flags": f"0x{flags:02X}",
-                "first_row": int(bool(flags & FLAG_FIRST_ROW)),
+                "first_row": int(packet.first_row),
+                "first_processed_row": int(packet.first_processed_row),
                 "last_row": int(bool(flags & FLAG_LAST_ROW)),
                 "fpga_status": f"0x{header.fpga_status:02X}",
                 "header_check": f"0x{header.header_check:02X}",

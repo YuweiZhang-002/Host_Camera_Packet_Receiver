@@ -6,8 +6,8 @@ This manifest records what was moved from the FPGA development workspace into th
 
 | Field | Value |
 |---|---|
-| Source workspace | `D:\prg\prg_cam` |
-| Host repository | `D:\prg\prg_cam_host` |
+| Source workspace | `<PRIVATE_INTEGRATION_WORKSPACE>` (historical import source; not required after clone) |
+| Host repository | `D:\prg\blank_project\Host_Camera_Packet_Receiver` (example cold-start path) |
 | Source closeout commit | `7c6f9d1` |
 | Host base commit | `a991ef0` |
 | Publication branch | `feat/calibration-pipeline-publication` |
@@ -31,7 +31,7 @@ Extrinsic CLI files: `build_stereo_pairs.py`, `calibrate_binary_stereo.py`, and 
 
 Implementation modules: `binary_calibration.py`, `calibration_config.py`, `calibration_refill.py`, `calibration_validation.py`, `extrinsic_config.py`, `extrinsic_validation.py`, `stereo_calibration.py`, and `stereo_pairs.py` under `taxi_receiver/`.
 
-Public wrappers and runbooks: `scripts_ps/run_intrinsic_calibration.ps1`, `scripts_ps/run_extrinsic_calibration.ps1`, and `docs/calibration_pipeline*.md`.
+Public wrappers and runbooks: `scripts_ps/calibration/run_intrinsic_calibration.ps1`, `scripts_ps/calibration/run_extrinsic_calibration.ps1`, and `docs/calibration_pipeline*.md`.
 
 ## Explicit exclusions
 
